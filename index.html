@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema Fotográfico PRO v9.0 - Mídia e Checklist</title>
+    
+    <!-- SDKs do Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <style>
+        :root {
+            --bg-primary: #19191D; --bg-secondary: #212125; --bg-card: #2B2B30;
+            --text-primary: #EAEAEB; --text-secondary: #A0A0A5; --accent-blue: #58a6ff;
+            --accent-green: #34D399; --accent-red: #F87171; --accent-yellow: #FBBF24; --border-color: #3A3A40;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+        html, body { height: 100%; overflow: hidden; }
+        body { background-color: var(--bg-primary); color: var(--text-primary); display: flex; justify-content: center; align-items: center; font-size: 16px; }
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: var(--bg-secondary); } ::-webkit-scrollbar-thumb { background-color: #444; border-radius: 3px; }
+
+        .app-container { width: 100%; height: 100%; display: flex; background-color: var(--bg-secondary); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); }
+        .sidebar { width: 80px; background-color: var(--bg-primary); padding: 24px 0; display: flex; flex-direction: column; align-items: center; flex-shrink: 0; border-right: 1px solid var(--border-color); overflow-y: auto; z-index: 10; transition: width 0.3s ease; }
+        .sidebar .logo { margin-bottom: 40px; flex-shrink: 0; }
+        .sidebar nav { width: 100%; } .sidebar nav ul { list-style: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 10px; }
+        .sidebar nav .nav-group-title { color: #666; font-size: 0.6rem; font-weight: bold; text-transform: uppercase; padding: 15px 0 5px; }
+        .sidebar nav a { display: flex; justify-content: center; align-items: center; width: 52px; height: 52px; border-radius: 12px; color: var(--text-secondary); transition: all 0.2s ease-in-out; text-decoration: none; }
+        .sidebar nav a:hover { color: var(--text-primary); background-color: var(--bg-card); }
+        .sidebar nav a.active { color: var(--text-primary); background-color: var(--accent-blue); }
+        .sidebar nav svg { width: 24px; height: 24px; }
+
+        .main-content { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .main-header { display: flex; justify-content: space-between; align-items: center; padding: 24px 40px; flex-shrink: 0; border-bottom: 1px solid var(--border-color); }
+        .header-title h1 { font-size: 2rem; font-weight: 700; } .header-title p { color: var(--text-secondary); font-size: 1rem; margin-top: 4px; }
+        .header-actions .profile img { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--border-color); }
+        .content-area { flex-grow: 1; padding: 32px 40px; overflow-y: auto; }
+        .content-section { display: none; } .content-section.active { display: block; animation: fadeIn 0.5s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .section-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 24px; }
+        .section-title { font-size: 1.3rem; font-weight: 600; color: var(--text-secondary); }
+        .add-button { background: var(--accent-green); color: #fff; border: none; padding: 10px 20px; font-size: 0.9em; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 8px; }
+        .add-button:hover { filter: brightness(1.1); box-shadow: 0 5px 15px rgba(52, 211, 153, 0.3); }
+
+        .dashboard-grid, .reports-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+        .dashboard-card { background-color: var(--bg-card); border-radius: 16px; padding: 24px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); display: flex; flex-direction: column; justify-content: space-between; }
+        .dashboard-card .card-title { font-size: 1rem; color: var(--text-secondary); font-weight: 500; }
+        .dashboard-card .card-value { font-size: 2.8rem; font-weight: 700; color: var(--text-primary); margin-top: 8px; }
+        .dashboard-card .card-value.expense { color: var(--accent-red); } .dashboard-card .card-value.profit { color: var(--accent-green); }
+
+        .data-table-container, .card { background-color: var(--bg-card); padding: 25px; border-radius: 16px; overflow-x: auto;}
+        .data-table { width: 100%; border-collapse: collapse; min-width: 600px; } .data-table thead { border-bottom: 1px solid var(--border-color); }
+        .data-table th { padding: 12px 15px; text-align: left; color: var(--text-secondary); font-weight: 600; font-size: 0.85em; text-transform: uppercase; }
+        .data-table tbody tr { border-bottom: 1px solid var(--border-color); } .data-table tbody tr:last-child { border-bottom: none; }
+        .data-table tbody tr:hover { background-color: rgba(255, 255, 255, 0.04); }
+        .data-table td { padding: 15px; text-align: left; font-size: 0.9em; color: var(--text-primary); vertical-align: middle; }
+        td.actions button { background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2em; padding: 5px; transition: all 0.2s ease; margin: 0 5px; }
+        .delete-btn:hover { color: var(--accent-red); transform: scale(1.1); } .edit-btn:hover, .view-btn:hover { color: var(--accent-blue); transform: scale(1.1); }
+        .no-data-message { padding: 40px; text-align: center; color: var(--text-secondary); font-style: italic; font-size: 1em; }
+        .data-table td.amount.expense { color: var(--accent-red); font-weight: bold; } .data-table td.amount.revenue { color: var(--accent-green); font-weight: bold; }
+
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+        .card h3 { margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .card .add-checklist-item-btn { font-size: 0.8em; padding: 4px 8px; }
+        .card ul { list-style: none; padding-left: 5px; } .card ul li { margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; } 
+        .card ul li label { flex-grow: 1; word-break: break-word; }
+        .card input[type="checkbox"] { margin-right: 10px; flex-shrink: 0; }
+        
+        .inspiration-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+        .inspiration-card { background-color: var(--bg-card); border-radius: 16px; text-align: center; padding: 0; overflow: hidden; position: relative; }
+        .inspiration-card .media-container { width: 100%; height: 180px; background-color: var(--bg-secondary); display: flex; align-items: center; justify-content: center; }
+        .inspiration-card .media-container img, .inspiration-card .media-container iframe { width: 100%; height: 100%; object-fit: cover; border: none; }
+        .inspiration-card .title { padding: 15px; font-weight: 600; word-break: break-word; }
+        .inspiration-card .delete-btn { position: absolute; top: 10px; right: 10px; background-color: rgba(0,0,0,0.5); border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; z-index: 2; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.7); justify-content: center; align-items: center; animation: fadeIn 0.3s ease; }
+        .modal-content { background-color: var(--bg-card); color: var(--text-primary); padding: 30px 40px; border-radius: 16px; position: relative; width: 90%; max-width: 500px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .close-modal-btn { color: var(--text-secondary); position: absolute; top: 15px; right: 20px; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close-modal-btn:hover, .close-modal-btn:focus { color: var(--text-primary); }
+        .modal-content h2 { margin-bottom: 24px; font-size: 1.5rem; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 8px; font-size: 0.9em; color: var(--text-secondary); }
+        .form-group input, .form-group select { width: 100%; background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; color: var(--text-primary); font-size: 1em; }
+        .form-group input:focus, .form-group select:focus { border-color: var(--accent-blue); outline: none; }
+        .modal-content button[type="submit"] { width: 100%; background: var(--accent-blue); color: #fff; border: none; padding: 12px 20px; font-size: 1em; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; margin-top: 10px; }
+        .modal-content button[type="submit"]:hover { background: #4a91e2; }
+        .toast-notification { position: fixed; bottom: -100px; left: 50%; transform: translateX(-50%); background-color: var(--accent-green); color: white; padding: 15px 25px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); z-index: 2000; font-weight: 600; transition: all 0.5s ease-in-out; }
+        .toast-notification.show { bottom: 80px; }
+        .kanban-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+        .kanban-column { background-color: var(--bg-primary); border-radius: 12px; padding: 15px; display: flex; flex-direction: column; }
+        .kanban-column-title { font-size: 1.1rem; font-weight: 600; color: var(--text-secondary); padding: 0 5px 15px; border-bottom: 2px solid var(--border-color); text-transform: uppercase; letter-spacing: 0.5px; }
+        .kanban-cards { flex-grow: 1; min-height: 100px; display: flex; flex-direction: column; gap: 12px; padding-top: 15px; }
+        .kanban-card { background-color: var(--bg-card); border-radius: 8px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); display: flex; flex-direction: column; justify-content: space-between; gap: 10px; }
+        .kanban-card-title { font-weight: 600; color: var(--text-primary); }
+        .kanban-card-details { font-size: 0.8em; color: var(--text-secondary); display: flex; flex-direction: column; gap: 4px; }
+        .kanban-card-footer { border-top: 1px solid var(--border-color); margin-top: 10px; padding-top: 10px; }
+        .move-project-btn { background-color: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; font-size: 0.8em; font-weight: bold; width: 100%; cursor: pointer; transition: all 0.2s ease; }
+        .move-project-btn:hover { background-color: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
+        .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 600; text-transform: capitalize; }
+        .status-badge.status-ativo, .status-badge.status-funcional, .status-badge.status-entregue, .status-badge.status-finalizado { background-color: rgba(52, 211, 153, 0.2); color: #34D399; }
+        .status-badge.status-pausado, .status-badge.status-manutencao, .status-badge.status-planejado { background-color: rgba(251, 191, 36, 0.2); color: #FBBF24; }
+        .status-badge.status-quebrado, .status-badge.status-cancelado { background-color: rgba(248, 113, 113, 0.2); color: #F87171; }
+        .priority-alta { color: var(--accent-red); font-weight: bold; text-transform: capitalize; }
+        .priority-media { color: var(--accent-yellow); font-weight: bold; text-transform: capitalize; }
+        .priority-baixa { color: var(--accent-green); font-weight: bold; text-transform: capitalize; }
+
+        /* --- ESTILOS PARA CELULAR (MOBILE-FIRST) --- */
+        @media (max-width: 768px) {
+            body { font-size: 14px; -webkit-tap-highlight-color: transparent; }
+            
+            /* Inverte a ordem para que o sidebar (agora tab bar) vá para baixo */
+            .app-container { flex-direction: column-reverse; border-radius: 0; }
+            
+            /* Transforma o sidebar em uma tab bar horizontal fixa na base */
+            .sidebar {
+                width: 100%; height: 65px;
+                flex-direction: row; justify-content: center;
+                overflow-x: auto; overflow-y: hidden;
+                padding: 0;
+                border-top: 1px solid var(--border-color); border-right: none;
+            }
+            .sidebar nav ul {
+                flex-direction: row; justify-content: flex-start;
+                align-items: center; height: 100%;
+                padding: 0 10px; gap: 10px;
+            }
+            .sidebar nav a { width: 50px; height: 50px; }
+            .sidebar nav a.active { background-color: var(--accent-blue); }
+            /* Esconde itens desnecessários na tab bar */
+            .sidebar .logo, .sidebar .nav-group-title { display: none; }
+            
+            /* Ajusta o conteúdo principal para ocupar o espaço restante */
+            .main-content { height: calc(100% - 65px); }
+            .main-header { padding: 16px; }
+            .header-title h1 { font-size: 1.5rem; }
+            .header-title p { font-size: 0.8rem; }
+            
+            /* Reduz o padding da área de conteúdo */
+            .content-area { padding: 16px; }
+            
+            /* Garante que todos os grids empilhem em uma única coluna */
+            .dashboard-grid, .reports-grid, .grid-container, .kanban-board {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .kanban-column { margin-bottom: 20px; }
+            
+            .data-table-container { padding: 15px; }
+            .data-table td, .data-table th { padding: 12px 10px; }
+
+            .section-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+            .add-button { width: 100%; justify-content: center; padding: 12px; }
+
+            /* Otimiza modal para telas pequenas */
+            .modal-content {
+                width: 95%; padding: 25px;
+                max-height: 85vh; overflow-y: auto;
+            }
+            .modal-content h2 { font-size: 1.3rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="logo"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="#EAEAEB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 17L12 22L22 17" stroke="#EAEAEB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12L12 17L22 12" stroke="#EAEAEB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <nav>
+                 <ul>
+                     <li class="nav-group-title">Principal</li>
+                     <li><a href="#" class="nav-link active" data-section="visao-geral" title="Visão Geral"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></a></li>
+                     <li><a href="#" class="nav-link" data-section="agenda" title="Agenda"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"></rect><line x1="16" y1="2" y2="6"></line><line x1="8" y1="2" y2="6"></line><line x1="3" x2="21" y1="10" y2="10"></line></svg></a></li>
+                     <li><a href="#" class="nav-link" data-section="tarefas" title="Tarefas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></a></li>
+                     <li class="nav-group-title">Gestão</li>
+                     <li><a href="#" class="nav-link" data-section="projetos" title="Projetos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg></a></li>
+                     <li><a href="#" class="nav-link" data-section="clientes" title="Clientes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></a></li>
+                     <li><a href="#" class="nav-link" data-section="financeiro" title="Financeiro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></a></li>
+                     <li><a href="#" class="nav-link" data-section="equipamentos" title="Equipamentos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"></rect><line x1="2" y1="8" x2="22" y2="8"></line><line x1="6" y1="13" x2="6.01" y2="13"></line><line x1="10" y1="13" x2="10.01" y2="13"></line></svg></a></li>
+                     <li class="nav-group-title">Produção</li>
+                     <li><a href="#" class="nav-link" data-section="checklist" title="Checklist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M12 8v8"></path><path d="M8 12h8"></path></svg></a></li>
+                     <li><a href="#" class="nav-link" data-section="inspiracao" title="Inspiração"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></a></li>
+                     <li class="nav-group-title">Análise</li>
+                     <li><a href="#" class="nav-link" data-section="relatorios" title="Relatórios"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="m18.7 8-5.1 5.2-2.8-2.7L7 14.3"></path></svg></a></li>
+                     <li><a href="#" class="nav-link" data-section="marketing" title="Marketing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.41-1.41"></path><path d="m4 11 2-2 3 3 2-2"></path><path d="m7 14 2-2"></path><path d="m3 21 2-2"></path><path d="M12 2l-2 4-4 2 4 2 2 4 2-4 4-2-4-2z"></path></svg></a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <div class="main-content">
+            <header class="main-header">
+                <div class="header-title"><h1 id="main-title">Visão Geral</h1><p id="current-date"></p></div>
+                <div class="header-actions"><div class="profile"><img src="https://i.pravatar.cc/150?u=photoSystemUser" alt="User Avatar"></div></div>
+            </header>
+            <main class="content-area">
+                <div id="visao-geral-content" class="content-section"></div>
+                <div id="agenda-content" class="content-section"></div>
+                <div id="tarefas-content" class="content-section"></div>
+                <div id="projetos-content" class="content-section"></div>
+                <div id="clientes-content" class="content-section"></div>
+                <div id="financeiro-content" class="content-section"></div>
+                <div id="equipamentos-content" class="content-section"></div>
+                <div id="checklist-content" class="content-section"></div>
+                <div id="inspiracao-content" class="content-section"></div>
+                <div id="relatorios-content" class="content-section"></div>
+                <div id="marketing-content" class="content-section"></div>
+            </main>
+        </div>
+        
+        <div id="modal-container"></div>
+        <div id="toast-notification" class="toast-notification"></div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- CONFIGURAÇÃO DO FIREBASE ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyAieln0FlVz24xAYL6F9rGxYnCTZBYX-dE",
+      authDomain: "teste-fa948.firebaseapp.com",
+      databaseURL: "https://teste-fa948-default-rtdb.firebaseio.com",
+      projectId: "teste-fa948",
+      storageBucket: "teste-fa948.firebasestorage.app",
+      messagingSenderId: "1057349112179",
+      appId: "1:1057349112179:web:f0fda5b041c1e9a0a43506",
+      measurementId: "G-EM1DSWLGPB"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    
+    // --- VARIÁVEIS E CONSTANTES GLOBAIS ---
+    const getEl = (id) => document.getElementById(id);
+    const modalContainer = getEl('modal-container');
+    let allData = {};
+
+    const defaultChecklist = {
+        preProducao: [ { id: Date.now() + 1, text: 'Briefing alinhado', checked: false } ],
+        diaDoJob: [ { id: Date.now() + 3, text: 'Backup em tempo real', checked: false } ],
+        posProducao: [ { id: Date.now() + 4, text: 'Backup Triplo', checked: false } ]
+    };
+
+    // --- FUNÇÕES DE DADOS (FIREBASE) ---
+    const loadData = () => {
+        database.ref('allData/').on('value', (snapshot) => {
+            const data = snapshot.val();
+            const defaultStructure = {
+                projects: [], clients: [], equipment: [], schedule: [], expenses: [], revenues: [],
+                inspirations: [], tasks: [], marketingPosts: [], checklist: defaultChecklist
+            };
+            allData = { ...defaultStructure, ...data };
+            const activeSection = document.querySelector('.nav-link.active')?.dataset.section || 'visao-geral';
+            renderPage(activeSection);
+        });
+    };
+    const saveData = () => { database.ref('allData/').set(allData); };
+
+    // --- FUNÇÕES UTILITÁRIAS ---
+    const formatCurrency = (value) => (typeof value === 'number' ? value : 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const showToast = (message) => { const t = getEl('toast-notification'); t.textContent = message; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3000); };
+    const escapeHtml = (unsafe) => unsafe ? String(unsafe).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;") : "";
+    const formatDate = (dateString, options = {}) => {
+        if (!dateString) return '--/--/----';
+        const date = new Date(dateString + 'T00:00:00Z');
+        return date.toLocaleDateString('pt-BR', { timeZone: 'UTC', ...options });
+    };
+
+    // --- RENDERIZAÇÃO E NAVEGAÇÃO ---
+    const renderPage = (sectionId) => {
+        const sectionDiv = getEl(`${sectionId}-content`);
+        if (!sectionDiv) return; 
+        document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+        sectionDiv.classList.add('active');
+        if (window.templates[sectionId]) {
+            sectionDiv.innerHTML = window.templates[sectionId]();
+            window.renderFunctions[sectionId]();
+        }
+        const titleEl = document.querySelector(`.nav-link[data-section="${sectionId}"]`);
+        if(titleEl) getEl('main-title').textContent = titleEl.title;
+    };
+    
+    const handleNavClick = (e) => {
+        e.preventDefault();
+        const link = e.target.closest('a.nav-link');
+        if (!link || link.classList.contains('active')) return;
+        document.querySelectorAll('.sidebar .nav-link').forEach(l => l.classList.remove('active'));
+        link.classList.add('active');
+        renderPage(link.dataset.section);
+    };
+
+    const initializeApp = () => {
+        getEl('current-date').textContent = new Date().toLocaleDateString('pt-BR', { year: 'numeric', month: 'long', day: 'numeric' });
+        document.querySelectorAll('.sidebar .nav-link').forEach(link => link.addEventListener('click', handleNavClick));
+        loadData(); 
+        document.body.addEventListener('data-changed', saveData);
+    };
+    
+    // --- MANIPULAÇÃO DE DADOS (CRUD) ---
+    const dispatchDataChanged = () => document.body.dispatchEvent(new Event('data-changed'));
+    const openModal = (modalHTML) => {
+        modalContainer.innerHTML = modalHTML;
+        const modal = modalContainer.querySelector('.modal');
+        modal.style.display = 'flex';
+        modal.querySelector('.close-modal-btn').addEventListener('click', closeModal);
+    };
+    const closeModal = () => { modalContainer.innerHTML = ''; };
+
+    const handleFormSubmit = (e, itemType, requiredFields, isEditing = false) => {
+        e.preventDefault();
+        const form = e.target;
+        const id = isEditing ? parseInt(form.querySelector('input[type=hidden]').value) : Date.now();
+        const newItem = { id };
+        let isValid = true;
+        requiredFields.forEach(field => { if (!form[field].value) isValid = false; });
+        if (!isValid) { showToast('Preencha os campos obrigatórios.'); return; }
+
+        Array.from(form.elements).forEach(el => { if(el.name) newItem[el.name] = el.value; });
+        
+        if (isEditing) {
+            const index = allData[itemType].findIndex(item => item.id === id);
+            if (index > -1) allData[itemType][index] = newItem;
+        } else {
+            if (!allData[itemType]) allData[itemType] = [];
+            allData[itemType].push(newItem);
+        }
+        
+        closeModal();
+        showToast(`Item ${isEditing ? 'atualizado' : 'adicionado'} com sucesso!`);
+        dispatchDataChanged();
+    };
+
+    const handleDelete = (id, itemType) => {
+        if (confirm(`Tem certeza que deseja excluir este item?`)) {
+            allData[itemType] = allData[itemType].filter(item => item.id !== id);
+            showToast('Item excluído com sucesso!');
+            dispatchDataChanged();
+        }
+    };
+    
+    window.templates = {};
+    window.renderFunctions = {};
+
+    // --- TEMPLATES E RENDERIZAÇÃO DAS SEÇÕES ---
+
+    // ** VISÃO GERAL **
+    templates['visao-geral'] = () => `<section class="dashboard-grid"><div class="dashboard-card"><h3 class="card-title">Projetos em Andamento</h3><div class="card-value" id="summary-ongoing-projects">0</div></div><div class="dashboard-card"><h3 class="card-title">Clientes Ativos</h3><div class="card-value" id="summary-active-clients">0</div></div><div class="dashboard-card"><h3 class="card-title">Equipamentos Funcionais</h3><div class="card-value" id="summary-functional-equipment">0</div></div><div class="dashboard-card"><h3 class="card-title">Total de Gastos (Mês)</h3><div class="card-value expense" id="summary-monthly-expenses">R$ 0,00</div></div></section>`;
+    renderFunctions['visao-geral'] = () => {
+        getEl('summary-ongoing-projects').textContent = allData.projects.filter(p => p.status === 'doing').length;
+        getEl('summary-active-clients').textContent = allData.clients.filter(c => c.status === 'ativo').length;
+        getEl('summary-functional-equipment').textContent = allData.equipment.filter(e => e.status === 'funcional').length;
+        const monthlyExpenses = allData.expenses.filter(e => e.date && e.date.startsWith(new Date().toISOString().slice(0, 7))).reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+        getEl('summary-monthly-expenses').textContent = formatCurrency(monthlyExpenses);
+    };
+
+    // ** AGENDA **
+    templates.agenda = () => `<div class="section-header"><h2 class="section-title">Agenda de Hoje</h2><button class="add-button" id="add-schedule-btn">+ Novo Compromisso</button></div><section class="data-table-container"><table class="data-table"><thead><tr><th>Hora</th><th>Compromisso</th><th>Ações</th></tr></thead><tbody id="schedule-tbody"></tbody></table><div id="no-schedule-message" class="no-data-message" style="display: none;"></div></section>`;
+    renderFunctions.agenda = () => {
+        const tbody = getEl('schedule-tbody'); tbody.innerHTML = '';
+        const todaySchedule = allData.schedule.filter(s => s.date === new Date().toISOString().slice(0, 10)).sort((a,b) => a.time.localeCompare(b.time));
+        getEl('no-schedule-message').style.display = todaySchedule.length === 0 ? 'block' : 'none';
+        getEl('no-schedule-message').textContent = todaySchedule.length === 0 ? 'Nenhum compromisso para hoje.' : '';
+        todaySchedule.forEach(s => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${escapeHtml(s.time)}</td><td>${escapeHtml(s.task)}</td><td class="actions"><button class="delete-btn" data-id="${s.id}">🗑️</button></td>`;
+            tbody.appendChild(tr);
+        });
+        getEl('add-schedule-btn').onclick = () => {
+            const modalHTML = `<div class="modal"><div class="modal-content"><span class="close-modal-btn">&times;</span><h2>Novo Compromisso</h2><form id="schedule-form"><div class="form-group"><label>Hora</label><input type="time" name="time" required></div><div class="form-group"><label>Compromisso</label><input type="text" name="task" required></div><input type="hidden" name="date" value="${new Date().toISOString().slice(0, 10)}"><button type="submit">Adicionar</button></form></div></div>`;
+            openModal(modalHTML);
+            getEl('schedule-form').onsubmit = (e) => handleFormSubmit(e, 'schedule', ['time', 'task']);
+        };
+        tbody.querySelectorAll('.delete-btn').forEach(btn => btn.onclick = () => handleDelete(parseInt(btn.dataset.id), 'schedule'));
+    };
+    
+    // ** TAREFAS **
+    templates.tarefas = () => `<div class="section-header"><h2 class="section-title">Tarefas & To-do List</h2><button class="add-button" id="add-task-btn">+ Nova Tarefa</button></div><section class="data-table-container"><table class="data-table"><thead><tr><th>Tarefa</th><th>Prioridade</th><th>Vencimento</th><th>Ações</th></tr></thead><tbody id="tasks-tbody"></tbody></table><div id="no-tasks-message" class="no-data-message" style="display: none;">Nenhuma tarefa pendente.</div></section>`;
+    renderFunctions.tarefas = () => {
+        const tbody = getEl('tasks-tbody'); tbody.innerHTML = '';
+        getEl('no-tasks-message').style.display = allData.tasks.length === 0 ? 'block' : 'none';
+        allData.tasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate)).forEach(t => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${escapeHtml(t.description)}</td><td class="priority-${t.priority}">${t.priority}</td><td>${formatDate(t.dueDate)}</td><td class="actions"><button class="delete-btn" data-id="${t.id}">🗑️</button></td>`;
+            tbody.appendChild(tr);
+        });
+        getEl('add-task-btn').onclick = () => {
+            const modalHTML = `<div class="modal"><div class="modal-content"><span class="close-modal-btn">&times;</span><h2>Nova Tarefa</h2><form id="task-form"><div class="form-group"><label>Descrição</label><input type="text" name="description" required></div><div class="form-group"><label>Prioridade</label><select name="priority"><option value="baixa">Baixa</option><option value="media">Média</option><option value="alta">Alta</option></select></div><div class="form-group"><label>Vencimento</label><input type="date" name="dueDate"></div><button type="submit">Adicionar</button></form></div></div>`;
+            openModal(modalHTML);
+            getEl('task-form').onsubmit = (e) => handleFormSubmit(e, 'tasks', ['description']);
+        };
+        tbody.querySelectorAll('.delete-btn').forEach(btn => btn.onclick = () => handleDelete(parseInt(btn.dataset.id), 'tasks'));
+    };
+
+    // ** PROJETOS **
+    templates.projetos = () => `<div class="section-header"><h2 class="section-title">Status dos Projetos</h2><button class="add-button" id="add-project-btn">+ Adicionar Projeto</button></div><section class="kanban-board"><div class="kanban-column"><h3 class="kanban-column-title">A Fazer</h3><div class="kanban-cards" id="kanban-todo"></div></div><div class="kanban-column"><h3 class="kanban-column-title">Em Andamento</h3><div class="kanban-cards" id="kanban-doing"></div></div><div class="kanban-column"><h3 class="kanban-column-title">Concluído</h3><div class="kanban-cards" id="kanban-done"></div></div></section>`;
+    renderFunctions.projetos = () => {
+        const columns = { todo: getEl('kanban-todo'), doing: getEl('kanban-doing'), done: getEl('kanban-done') };
+        Object.values(columns).forEach(col => col.innerHTML = '');
+        if (allData.projects.length === 0) { columns.todo.innerHTML = `<p class="no-data-message">Adicione um projeto.</p>`; }
+        allData.projects.forEach(p => {
+            const card = document.createElement('div'); card.className = 'kanban-card';
+            let footer = '';
+            if (p.status === 'todo') { footer = `<div class="kanban-card-footer"><button class="move-project-btn" data-id="${p.id}" data-next-status="doing">Iniciar →</button></div>`; }
+            else if (p.status === 'doing') { footer = `<div class="kanban-card-footer"><button class="move-project-btn" data-id="${p.id}" data-next-status="done">Finalizar ✓</button></div>`; }
+            card.innerHTML = `<div><div class="kanban-card-title">${escapeHtml(p.name)}</div><div class="kanban-card-details"><span><strong>Cliente:</strong> ${escapeHtml(p.client) || 'N/A'}</span><span><strong>Prazo:</strong> ${formatDate(p.deadline)}</span></div></div>${footer}`;
+            if (columns[p.status]) columns[p.status].appendChild(card);
+        });
+        getEl('add-project-btn').onclick = () => {
+            let clientOptions = allData.clients.filter(c => c.status === 'ativo').map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+            const modalHTML = `<div class="modal"><div class="modal-content"><span class="close-modal-btn">&times;</span><h2>Novo Projeto</h2><form id="project-form"><div class="form-group"><label>Nome</label><input type="text" name="name" required></div><div class="form-group"><label>Cliente</label><select name="client" required><option value="">Selecione</option>${clientOptions}</select></div><div class="form-group"><label>Prazo</label><input type="date" name="deadline"></div><div class="form-group"><label>Status</label><select name="status"><option value="todo">A Fazer</option><option value="doing">Em Andamento</option><option value="done">Concluído</option></select></div><button type="submit">Adicionar</button></form></div></div>`;
+            openModal(modalHTML);
+            getEl('project-form').onsubmit = (e) => handleFormSubmit(e, 'projects', ['name', 'client']);
+        };
+        document.querySelectorAll('.move-project-btn').forEach(btn => btn.onclick = (e) => {
+            const id = parseInt(e.target.dataset.id);
+            const status = e.target.dataset.nextStatus;
+            const index = allData.projects.findIndex(p => p.id === id);
+            if(index > -1) { allData.projects[index].status = status; dispatchDataChanged(); }
+        });
+    };
+    
+    // ** O restante das funções de `templates` e `renderFunctions` permanecem idênticas ao código anterior. **
+    // Você pode colar as funções para:
+    // - clientes
+    // - financeiro
+    // - equipamentos
+    // - checklist
+    // - inspiracao
+    // - relatorios
+    // - marketing
+    // Exatamente como estavam no código anterior.
+
+    initializeApp();
+});
+</script>
+</body>
+</html>
