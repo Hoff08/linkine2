@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -17,6 +18,9 @@
     
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    
+    <!-- Biblioteca de Gráficos Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
         :root {
@@ -44,11 +48,6 @@
         .add-button { background-color: var(--bg-card); color: var(--text-primary); border: none; font-weight: 600; padding: 10px 16px; border-radius: 12px; cursor: pointer; }
         .no-data-message { color: var(--text-secondary); text-align: center; padding: 20px 0;}
 
-        .dashboard-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
-        .dashboard-header .user-info { display: flex; align-items: center; gap: 12px; }
-        .dashboard-header .user-info img { width: 48px; height: 48px; border-radius: 50%; }
-        .dashboard-header .user-info .name { font-weight: 600; font-size: 1.1rem; }
-        .dashboard-header .user-info .status { font-size: 0.9rem; color: var(--text-secondary); }
         .search-bar { display: flex; align-items: center; background-color: var(--bg-card); padding: 12px 16px; border-radius: 16px; margin-bottom: 24px; }
         .search-bar input { background: none; border: none; color: var(--text-primary); font-size: 1rem; flex-grow: 1; outline: none; }
         .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 32px; }
@@ -112,6 +111,14 @@
         .inspiration-card .media-container img, .inspiration-card .media-container iframe { width: 100%; height: 100%; object-fit: cover; border: none; }
         .inspiration-card .title { padding: 15px; font-weight: 600; }
         .inspiration-card .delete-btn { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); border-radius: 50%; width:30px; height:30px; display:flex; align-items:center; justify-content:center; }
+        
+        .chart-container {
+            background-color: var(--bg-card);
+            padding: 20px;
+            border-radius: 20px;
+            height: 350px; 
+            margin-top: 24px;
+        }
     </style>
 </head>
 <body>
@@ -162,6 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const contentArea = getEl('content-area');
     let allData = {};
     let currentSection = 'visao-geral';
+    let trajectoryChartInstance = null; 
 
     const defaultStructure = {
         projects: [], clients: [], schedule: [], tasks: [], expenses: [], revenues: [], 
@@ -352,7 +360,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.templates = {};
     window.renderFunctions = {};
     
-    templates['visao-geral'] = () => `<div class="dashboard-header"><div class="user-info"><img src="https://i.pravatar.cc/150?u=photoSystemUser" alt="User Avatar"><div><div class="status">Bem-vindo(a)!</div><div class="name">Oliver Bennet</div></div></div></div><div class="search-bar"><input type="text" placeholder="Buscar..."></div><div class="stats-grid"><div class="stat-card highlight-card"><div class="card-header"><div class="card-arrow">↗</div></div><div><div class="card-title">Total de Projetos</div><div class="card-value" id="summary-total-projects">0</div></div></div><div class="stat-card"><div class="card-header"><div class="card-arrow">↗</div></div><div class="card-title">Pagamentos Recebidos</div><div class="card-value" id="summary-total-payment">R$ 0</div></div><div class="stat-card"><div class="card-header"><div class="card-arrow">↗</div></div><div class="card-title">Clientes</div><div class="card-value" id="summary-total-clients">0</div></div></div><h2 class="section-title">Visão Geral do Estoque</h2><div class="stock-overview"><div class="stock-item"><div class="status"><span class="dot green"></span> Funcional</div><div class="value" id="stock-in-stock">0</div></div><div class="stock-item"><div class="status"><span class="dot orange"></span> Manutenção</div><div class="value" id="stock-low-stock">0</div></div><div class="stock-item"><div class="status"><span class="dot red"></span> Quebrado</div><div class="value" id="stock-out-of-stock">0</div></div></div>`;
+    templates['visao-geral'] = () => `<div class="search-bar"><input type="text" placeholder="Buscar..."></div><div class="stats-grid"><div class="stat-card highlight-card"><div class="card-header"><div class="card-arrow">↗</div></div><div><div class="card-title">Total de Projetos</div><div class="card-value" id="summary-total-projects">0</div></div></div><div class="stat-card"><div class="card-header"><div class="card-arrow">↗</div></div><div class="card-title">Pagamentos Recebidos</div><div class="card-value" id="summary-total-payment">R$ 0</div></div><div class="stat-card"><div class="card-header"><div class="card-arrow">↗</div></div><div class="card-title">Clientes</div><div class="card-value" id="summary-total-clients">0</div></div></div><h2 class="section-title">Visão Geral do Estoque</h2><div class="stock-overview"><div class="stock-item"><div class="status"><span class="dot green"></span> Funcional</div><div class="value" id="stock-in-stock">0</div></div><div class="stock-item"><div class="status"><span class="dot orange"></span> Manutenção</div><div class="value" id="stock-low-stock">0</div></div><div class="stock-item"><div class="status"><span class="dot red"></span> Quebrado</div><div class="value" id="stock-out-of-stock">0</div></div></div>`;
     renderFunctions['visao-geral'] = () => {
         getEl('summary-total-projects').textContent = (allData.projects || []).length;
         const totalRevenue = (allData.revenues || []).reduce((sum, r) => sum + parseFloat(r.amount || 0), 0);
@@ -481,16 +489,128 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    templates.relatorios = () => `<div class="section-header"><h2 class="section-title">Relatórios do Mês</h2></div><div id="reports-grid" class="stats-grid"></div>`;
+    templates.relatorios = () => `
+        <div class="section-header"><h2 class="section-title">Relatórios do Mês</h2></div>
+        <div id="reports-grid" class="stats-grid">
+            <div class="stat-card">
+                <div class="card-title">Lucro Líquido</div>
+                <div class="card-value" id="report-profit">R$ 0,00</div>
+            </div>
+            <div class="stat-card">
+                <div class="card-title">Total Receitas</div>
+                <div class="card-value" id="report-revenue">R$ 0,00</div>
+            </div>
+            <div class="stat-card">
+                <div class="card-title">Total Despesas</div>
+                <div class="card-value" id="report-expense">R$ 0,00</div>
+            </div>
+            <div class="stat-card">
+                <div class="card-title">Cliente Principal</div>
+                <div class="card-value" style="font-size: 1.2rem;" id="report-top-client">N/A</div>
+            </div>
+        </div>
+        <div class="section-header" style="margin-bottom: -10px; margin-top: 10px;"><h2 class="section-title">Trajetória de Ativos</h2></div>
+        <div class="chart-container">
+            <canvas id="trajectoryChart"></canvas>
+        </div>
+    `;
     renderFunctions.relatorios = () => {
-        const grid = getEl('reports-grid');
+        // --- 1. Cálculos e preenchimento dos CARDS (Dinâmico) ---
         const currentMonth = new Date().toISOString().slice(0, 7);
-        const revenue = (allData.revenues || []).filter(r => r.date && r.date.startsWith(currentMonth)).reduce((sum, r) => sum + parseFloat(r.amount || 0), 0);
-        const expense = (allData.expenses || []).filter(e => e.date && e.date.startsWith(currentMonth)).reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
-        const profit = revenue - expense;
+        const revenuesList = (allData.revenues || []).filter(r => r.date && r.date.startsWith(currentMonth));
+        const expensesList = (allData.expenses || []).filter(e => e.date && e.date.startsWith(currentMonth));
+        
+        const revenueTotal = revenuesList.reduce((sum, r) => sum + parseFloat(r.amount || 0), 0);
+        const expenseTotal = expensesList.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+        const profit = revenueTotal - expenseTotal;
+        
         const clientCounts = (allData.projects || []).reduce((acc, p) => { acc[p.client] = (acc[p.client] || 0) + 1; return acc; }, {});
         const topClient = Object.keys(clientCounts).sort((a, b) => clientCounts[b] - clientCounts[a])[0];
-        grid.innerHTML = `<div class="stat-card"><div class="card-title">Lucro Líquido</div><div class="card-value" style="color:${profit >= 0 ? 'var(--accent-secondary)' : 'var(--accent-red)'};">${formatCurrency(profit)}</div></div><div class="stat-card"><div class="card-title">Total Receitas</div><div class="card-value" style="color:var(--accent-secondary);">${formatCurrency(revenue)}</div></div><div class="stat-card"><div class="card-title">Total Despesas</div><div class="card-value">${formatCurrency(expense)}</div></div><div class="stat-card"><div class="card-title">Cliente Principal</div><div class="card-value" style="font-size: 1.2rem;">${topClient || 'N/A'}</div></div>`;
+
+        getEl('report-profit').innerHTML = `<span style="color:${profit >= 0 ? 'var(--accent-secondary)' : 'var(--accent-red)'};">${formatCurrency(profit)}</span>`;
+        getEl('report-revenue').innerHTML = `<span style="color:var(--accent-secondary);">${formatCurrency(revenueTotal)}</span>`;
+        getEl('report-expense').innerHTML = formatCurrency(expenseTotal);
+        getEl('report-top-client').textContent = topClient || 'N/A';
+
+        // --- 2. Lógica e renderização do GRÁFICO (Estático) ---
+        const chartCtx = getEl('trajectoryChart')?.getContext('2d');
+        if (!chartCtx) return;
+
+        // Dados estáticos para corresponder à imagem de referência
+        const chartData = {
+            labels: ['09/09', '24/09'],
+            data: [10500, 11300] 
+        };
+
+        const goalValue = 13000;
+        const goalData = Array(chartData.labels.length).fill(goalValue);
+
+        if (trajectoryChartInstance) {
+            trajectoryChartInstance.destroy();
+        }
+
+        const gradient = chartCtx.createLinearGradient(0, 0, 0, 300);
+        gradient.addColorStop(0, 'rgba(42, 61, 55, 0.7)');
+        gradient.addColorStop(1, 'rgba(42, 61, 55, 0)');
+
+        trajectoryChartInstance = new Chart(chartCtx, {
+            type: 'line',
+            data: {
+                labels: chartData.labels,
+                datasets: [
+                    {
+                        label: 'Meta',
+                        data: goalData,
+                        borderColor: '#555',
+                        borderWidth: 2,
+                        borderDash: [3, 4],
+                        pointRadius: 0,
+                        fill: false,
+                    },
+                    {
+                        label: 'Patrimônio',
+                        data: chartData.data,
+                        borderColor: '#000000',
+                        backgroundColor: gradient,
+                        fill: true,
+                        tension: 0, // Linha reta como na imagem
+                        pointBackgroundColor: '#FFFFFF',
+                        pointBorderColor: '#000000',
+                        pointBorderWidth: 2,
+                        pointHoverRadius: 7,
+                        pointRadius: 5,
+                        borderWidth: 2,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        align: 'end',
+                        labels: { color: '#FFFFFF', boxWidth: 20, padding: 20 }
+                    }
+                },
+                scales: {
+                    y: {
+                        ticks: { 
+                            color: '#FFFFFF',
+                            stepSize: 500,
+                            callback: function(value) { return 'R$ ' + value.toLocaleString('pt-BR', { minimumFractionDigits: 0 }); }
+                        },
+                        grid: { color: 'rgba(255, 255, 255, 0.15)' },
+                        border: { display: false }
+                    },
+                    x: {
+                        ticks: { color: '#FFFFFF' },
+                        grid: { display: false },
+                        border: { display: false }
+                    }
+                }
+            }
+        });
     };
 
     templates.marketing = () => `<div class="section-header"><h2 class="section-title">Marketing</h2><button class="add-button" data-type="marketing">Adicionar Post</button></div><div class="list-container" id="marketing-list"></div>`;
@@ -536,4 +656,4 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 </body>
-</html>
+</html>```
